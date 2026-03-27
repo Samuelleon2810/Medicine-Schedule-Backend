@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Farmacia - Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { primary: { 400: '#34d399', 500: '#22c55e', 600: '#16a34a' } } } }, darkMode: 'class' };
+  </script>
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/animations.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+  <div class="min-h-screen flex flex-col">
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+      <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center">
+            <span class="text-emerald-400 font-semibold text-lg">Rx</span>
+          </div>
+          <div>
+            <h1 class="text-lg sm:text-xl font-semibold text-slate-50">Panel de Farmacia</h1>
+            <p class="text-xs sm:text-sm text-slate-400">Dashboard</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="supabase-status" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/30">Comprobando…</span>
+          <a href="/medicamentos.html" class="btn-secondary">Inventario</a>
+          <button type="button" id="logout-btn" class="btn-secondary">Cerrar sesión</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-6xl mx-auto w-full px-4 py-6 space-y-6 animate-fade-in">
+      <div class="flex items-center justify-between">
+        <p class="text-xs text-slate-400">
+          <span class="animate-pulse-soft">●</span> Última actualización: <span id="last-updated">--</span>
+        </p>
+      </div>
+      <section class="grid gap-4 md:grid-cols-3">
+        <div class="stat-card card-hover animate-fade-in-up animate-stagger-1 opacity-0 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-400">Inventario bajo (&lt;5)</p>
+          <p id="stat-low" class="mt-1 text-2xl font-semibold text-slate-50">-</p>
+        </div>
+        <div class="stat-card card-hover animate-fade-in-up animate-stagger-2 opacity-0 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-400">Total medicamentos</p>
+          <p id="stat-total" class="mt-1 text-2xl font-semibold text-slate-50">-</p>
+        </div>
+        <div class="stat-card card-hover animate-fade-in-up animate-stagger-3 opacity-0 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-400">Ventas (días con datos)</p>
+          <p id="stat-ventas-days" class="mt-1 text-2xl font-semibold text-slate-50">-</p>
+        </div>
+      </section>
+
+      <section class="grid gap-6 lg:grid-cols-2">
+        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 card-hover animate-fade-in-up animate-stagger-4 opacity-0">
+          <h2 class="text-sm font-semibold text-slate-100 mb-4">Ventas en el tiempo</h2>
+          <canvas id="chart-ventas" height="200"></canvas>
+        </div>
+        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 card-hover animate-fade-in-up animate-stagger-5 opacity-0">
+          <h2 class="text-sm font-semibold text-slate-100 mb-4">Inventario actual (unidades)</h2>
+          <canvas id="chart-inventario" height="200"></canvas>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+    refreshSupabaseStatus();
+    setInterval(refreshSupabaseStatus, 30000);
+    document.getElementById('logout-btn').onclick = logout;
+
+    let chartVentas, chartInventario;
+
+    async function loadDashboard() {
+      const [ventasRes, invRes, bajoRes] = await Promise.all([
+        fetchWithAuth('/estadisticas/ventas').then(r => r.json()),
+        fetchWithAuth('/estadisticas/inventario').then(r => r.json()),
+        fetchWithAuth('/medicamentos/inventario-bajo').then(r => r.json()),
+      ]);
+      const ventas = (ventasRes.data || []);
+      const inventario = (invRes.data || []);
+      const bajo = (bajoRes.data || []);
+
+      document.getElementById('stat-low').textContent = bajo.length;
+      document.getElementById('stat-total').textContent = inventario.length;
+      document.getElementById('stat-ventas-days').textContent = ventas.length;
+      document.getElementById('last-updated').textContent = new Date().toLocaleTimeString('es-ES');
+
+      const ctxV = document.getElementById('chart-ventas').getContext('2d');
+      if (chartVentas) chartVentas.destroy();
+      chartVentas = new Chart(ctxV, {
+        type: 'bar',
+        data: {
+          labels: ventas.map(v => v.fecha),
+          datasets: [
+            { label: 'Unidades vendidas', data: ventas.map(v => v.cantidad), backgroundColor: 'rgba(34, 197, 94, 0.6)', borderColor: '#22c55e', borderWidth: 1 },
+            { label: 'Monto (€)', data: ventas.map(v => v.monto), backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#3b82f6', borderWidth: 1, yAxisID: 'y1' },
+          ],
+        },
+        options: {
+          responsive: true,
+          animation: { duration: 800 },
+          scales: {
+            y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+            y1: { position: 'right', beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false } },
+            x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+          },
+          plugins: { legend: { labels: { color: '#e2e8f0' } } },
+        },
+      });
+
+      const ctxI = document.getElementById('chart-inventario').getContext('2d');
+      if (chartInventario) chartInventario.destroy();
+      chartInventario = new Chart(ctxI, {
+        type: 'bar',
+        data: {
+          labels: inventario.map(i => (i.nombre || 'Sin nombre').slice(0, 12)),
+          datasets: [{ label: 'Cantidad', data: inventario.map(i => i.cantidad ?? 0), backgroundColor: 'rgba(34, 197, 94, 0.6)', borderColor: '#22c55e', borderWidth: 1 }],
+        },
+        options: {
+          responsive: true,
+          indexAxis: 'y',
+          animation: { duration: 800 },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+          },
+          plugins: { legend: { display: false } },
+        },
+      });
+    }
+
+    document.body.classList.add('loaded');
+    const POLL_INTERVAL_MS = 10000;
+    loadDashboard();
+    const pollTimer = setInterval(loadDashboard, POLL_INTERVAL_MS);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') loadDashboard();
+    });
+  </script>
+</body>
+</html>

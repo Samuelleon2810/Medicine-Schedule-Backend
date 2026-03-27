@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Farmacia - Inventario</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { primary: { 400: '#34d399', 500: '#22c55e', 600: '#16a34a' } } } }, darkMode: 'class' };
+  </script>
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/animations.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+  <div class="min-h-screen flex flex-col">
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+      <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center">
+            <span class="text-emerald-400 font-semibold text-lg">Rx</span>
+          </div>
+          <div>
+            <h1 class="text-lg sm:text-xl font-semibold text-slate-50">Panel de Farmacia</h1>
+            <p class="text-xs sm:text-sm text-slate-400">Inventario de medicamentos</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="supabase-status" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/30">Comprobando…</span>
+          <a href="/dashboard.html" class="btn-secondary">Dashboard</a>
+          <button type="button" id="logout-btn" class="btn-secondary">Cerrar sesión</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-6xl mx-auto w-full px-4 py-6 space-y-6 animate-fade-in">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-100">Medicamentos</h2>
+          <p class="text-xs text-slate-400 mt-0.5"><span class="animate-pulse-soft">●</span> Última actualización: <span id="last-updated">--</span></p>
+        </div>
+        <button type="button" id="btn-nuevo" class="btn-primary">+ Agregar medicamento</button>
+      </div>
+
+      <div class="rounded-2xl border border-slate-800 bg-slate-950/60 overflow-hidden card-hover">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-800 text-sm">
+            <thead class="bg-slate-900/60">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">ID</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Nombre</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Dosis</th>
+                <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-400">Cantidad</th>
+                <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-400">Precio</th>
+                <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-400">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-body" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+        <p id="empty-msg" class="hidden px-5 py-6 text-center text-sm text-slate-400">No hay medicamentos. Agrega el primero.</p>
+      </div>
+
+      <div id="form-container" class="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 space-y-4 hidden">
+        <h3 id="form-title" class="text-sm font-semibold text-slate-100">Agregar medicamento</h3>
+        <form id="form-medicamento" class="space-y-3">
+          <input type="hidden" name="id" value="" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="form-group">
+              <label>Nombre</label>
+              <input type="text" name="nombre" required class="input-field w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100" placeholder="Paracetamol" />
+            </div>
+            <div class="form-group">
+              <label>Dosis</label>
+              <input type="text" name="dosis" required class="input-field w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100" placeholder="500mg" />
+            </div>
+            <div class="form-group">
+              <label>Cantidad</label>
+              <input type="number" name="cantidad" min="0" step="1" required class="input-field w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100" placeholder="10" />
+            </div>
+            <div class="form-group">
+              <label>Precio</label>
+              <input type="number" name="precio" step="0.01" min="0" required class="input-field w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100" placeholder="2.50" />
+            </div>
+          </div>
+          <p id="form-msg" class="text-xs text-slate-400"></p>
+          <div class="flex gap-2">
+            <button type="submit" class="btn-primary">Guardar</button>
+            <button type="button" id="form-cancel" class="btn-secondary">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </main>
+
+    <div id="toast" class="fixed inset-x-0 bottom-4 flex justify-center px-4 opacity-0 transition-opacity pointer-events-none z-50">
+      <div id="toast-inner" class="max-w-md w-full rounded-xl border border-slate-800 bg-slate-900/90 px-4 py-3 text-sm text-slate-100 shadow-lg flex items-center justify-between gap-3 animate-toast-in">
+        <span id="toast-text"></span>
+      </div>
+    </div>
+  </div>
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+    refreshSupabaseStatus();
+    setInterval(refreshSupabaseStatus, 30000);
+    document.getElementById('logout-btn').onclick = logout;
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      const inner = document.getElementById('toast-inner');
+      document.getElementById('toast-text').textContent = msg;
+      inner.classList.remove('animate-toast-in');
+      void inner.offsetWidth;
+      inner.classList.add('animate-toast-in');
+      el.classList.remove('opacity-0');
+      el.classList.add('opacity-100');
+      setTimeout(() => { el.classList.add('opacity-0'); }, 3000);
+    }
+
+    const formContainer = document.getElementById('form-container');
+    const form = document.getElementById('form-medicamento');
+    const formTitle = document.getElementById('form-title');
+    const formMsg = document.getElementById('form-msg');
+
+    function showForm(medicamento = null) {
+      form.reset();
+      form.querySelector('[name="id"]').value = medicamento ? medicamento.id : '';
+      if (medicamento) {
+        formTitle.textContent = 'Editar medicamento';
+        form.nombre.value = medicamento.nombre;
+        form.dosis.value = medicamento.dosis;
+        form.cantidad.value = medicamento.cantidad;
+        form.precio.value = medicamento.precio;
+      } else {
+        formTitle.textContent = 'Agregar medicamento';
+      }
+      formMsg.textContent = '';
+      formContainer.classList.remove('hidden');
+      formContainer.classList.remove('animate-scale-in');
+      requestAnimationFrame(() => formContainer.classList.add('animate-scale-in'));
+    }
+
+    document.getElementById('btn-nuevo').onclick = () => showForm();
+    document.getElementById('form-cancel').onclick = () => formContainer.classList.add('hidden');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = form.querySelector('[name="id"]').value;
+      const payload = {
+        nombre: form.nombre.value.trim(),
+        dosis: form.dosis.value.trim(),
+        cantidad: parseInt(form.cantidad.value, 10),
+        precio: parseFloat(form.precio.value),
+      };
+      formMsg.textContent = '';
+      formMsg.className = 'text-xs text-slate-400';
+      try {
+        if (id) {
+          const res = await fetchWithAuth(`/medicamentos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error((await res.json()).detail);
+          showToast('Medicamento actualizado.');
+        } else {
+          const res = await fetchWithAuth('/medicamentos/crear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error((await res.json()).detail);
+          showToast('Medicamento creado.');
+        }
+        formContainer.classList.add('hidden');
+        loadList();
+      } catch (err) {
+        formMsg.textContent = err.message || 'Error';
+        formMsg.className = 'text-xs text-red-400';
+      }
+    });
+
+    async function loadList() {
+      const tbody = document.getElementById('tabla-body');
+      const emptyMsg = document.getElementById('empty-msg');
+      tbody.innerHTML = '';
+      try {
+        const res = await fetchWithAuth('/medicamentos');
+        const data = (await res.json()).data || [];
+        if (data.length === 0) {
+          emptyMsg.classList.remove('hidden');
+          return;
+        }
+        emptyMsg.classList.add('hidden');
+        document.getElementById('last-updated').textContent = new Date().toLocaleTimeString('es-ES');
+        for (const m of data) {
+          const tr = document.createElement('tr');
+          const staggerClass = data.indexOf(m) < 5 ? `animate-stagger-${data.indexOf(m) + 1}` : '';
+          tr.className = 'hover:bg-slate-900/60 table-row-animate ' + staggerClass;
+          tr.innerHTML = `
+            <td class="px-4 py-3 text-slate-400">${m.id}</td>
+            <td class="px-4 py-3 font-medium text-slate-100">${m.nombre ?? '-'}</td>
+            <td class="px-4 py-3 text-slate-300">${m.dosis ?? '-'}</td>
+            <td class="px-4 py-3 text-right text-slate-100">${m.cantidad ?? 0}</td>
+            <td class="px-4 py-3 text-right text-slate-100">${m.precio != null ? Number(m.precio).toFixed(2) : '-'}</td>
+            <td class="px-4 py-3 text-right space-x-2">
+              <button class="editar btn-secondary py-1" data-id="${m.id}">Editar</button>
+              <button class="vender btn-success" data-id="${m.id}">Vender</button>
+              <button class="eliminar btn-danger" data-id="${m.id}">Eliminar</button>
+            </td>
+          `;
+          tr.querySelector('.editar').onclick = () => showForm(m);
+          tr.querySelector('.vender').onclick = () => vender(m);
+          tr.querySelector('.eliminar').onclick = () => eliminar(m);
+          tbody.appendChild(tr);
+        }
+      } catch (err) {
+        showToast('Error al cargar inventario');
+      }
+    }
+
+    async function vender(item) {
+      const cantStr = prompt(`¿Cuántas unidades de "${item.nombre}"?`, '1');
+      if (cantStr === null) return;
+      const cantidad = parseInt(cantStr, 10);
+      if (!cantidad || cantidad <= 0) { showToast('Cantidad no válida'); return; }
+      const total = Number(item.precio) * cantidad;
+      const montoStr = prompt(`Total: ${total.toFixed(2)} €. Monto recibido:`, total.toFixed(2));
+      if (montoStr === null) return;
+      const monto = parseFloat(montoStr);
+      if (isNaN(monto)) { showToast('Monto no válido'); return; }
+      try {
+        const res = await fetchWithAuth('/medicamentos/vender', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.id, cantidad, monto }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail);
+        showToast(data.message || 'Venta registrada');
+        loadList();
+      } catch (err) {
+        showToast(err.message || 'Error al vender');
+      }
+    }
+
+    async function eliminar(m) {
+      if (!confirm(`¿Eliminar "${m.nombre}" del inventario?`)) return;
+      try {
+        const res = await fetchWithAuth(`/medicamentos/${m.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.json()).detail);
+        showToast('Medicamento eliminado');
+        loadList();
+      } catch (err) {
+        showToast(err.message || 'Error al eliminar');
+      }
+    }
+
+    document.body.classList.add('loaded');
+    const POLL_INTERVAL_MS = 15000;
+    loadList();
+    const pollTimer = setInterval(loadList, POLL_INTERVAL_MS);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') loadList();
+    });
+  </script>
+</body>
+</html>

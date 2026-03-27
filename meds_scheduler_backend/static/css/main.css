@@ -1,0 +1,28 @@
+/**
+ * Estilos base - Farmacia
+ * Tema oscuro con acentos verdes (salud/tech)
+ */
+:root {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-border: #334155;
+  --color-muted: #94a3b8;
+  --color-primary: #22c55e;
+  --color-primary-hover: #16a34a;
+  --color-primary-active: #15803d;
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  --radius: 0.75rem;
+  --radius-lg: 1rem;
+  --transition-btn: 0.2s ease;
+}
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Transición suave al cargar */
+body.loaded main {
+  animation: fadeIn 0.4s ease-out;
+}
